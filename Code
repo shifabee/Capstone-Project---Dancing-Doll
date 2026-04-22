@@ -1,0 +1,401 @@
+INITIAL CODE: BEFORE CHANGING CONCEPT
+
+from machine import Pin, PWM
+import bluetooth
+import time
+
+LEFT_IN1 = Pin(26, Pin.OUT)
+LEFT_IN2 = Pin(27, Pin.OUT)
+LEFT_ENA = PWM(Pin(25))
+LEFT_ENA.freq(1000)
+
+RIGHT_IN1 = Pin(14, Pin.OUT)
+RIGHT_IN2 = Pin(12, Pin.OUT)
+RIGHT_ENB = PWM(Pin(13))
+RIGHT_ENB.freq(1000)
+
+SPEED = 500
+
+IN1 = Pin(18, Pin.OUT)
+IN2 = Pin(19, Pin.OUT)
+IN3 = Pin(21, Pin.OUT)
+IN4 = Pin(22, Pin.OUT)
+
+ir = Pin(32, Pin.IN)
+
+value = ""
+name = "DancerBot"
+ble = bluetooth.BLE()
+
+ble.active(True)
+ble.config(gap_name=name)
+
+service_UUID = bluetooth.UUID("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
+char_UUID = bluetooth.UUID("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+
+char = (char_UUID, bluetooth.FLAG_WRITE)
+service = (service_UUID, (char,))
+((char_handle,),) = ble.gatts_register_services((service,))
+
+def stop():
+    LEFT_IN1.off(); LEFT_IN2.off()
+    RIGHT_IN1.off(); RIGHT_IN2.off()
+    LEFT_ENA.duty(0); RIGHT_ENB.duty(0)
+
+def forward():
+    LEFT_IN1.on(); LEFT_IN2.off()
+    RIGHT_IN1.on(); RIGHT_IN2.off()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def backward():
+    LEFT_IN1.off(); LEFT_IN2.on()
+    RIGHT_IN1.off(); RIGHT_IN2.on()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def turn_left():
+    LEFT_IN1.off(); LEFT_IN2.on()
+    RIGHT_IN1.on(); RIGHT_IN2.off()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def turn_right():
+    LEFT_IN1.on(); LEFT_IN2.off()
+    RIGHT_IN1.off(); RIGHT_IN2.on()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def stepper_step():
+    IN1.on(); IN2.off(); IN3.off(); IN4.off()
+    time.sleep(0.002)
+    IN1.off(); IN2.on(); IN3.off(); IN4.off()
+    time.sleep(0.002)
+    IN1.off(); IN2.off(); IN3.on(); IN4.off()
+    time.sleep(0.002)
+    IN1.off(); IN2.off(); IN3.off(); IN4.on()
+    time.sleep(0.002)
+
+def spin():
+    for i in range(120):
+        stepper_step()
+
+def check_boundary():
+    if ir.value() == 1:
+        backward()
+        time.sleep(1)
+        stop()
+
+def go_to_1():
+    forward(); time.sleep(2); stop()
+
+def go_to_2():
+    forward(); time.sleep(1)
+    turn_right(); time.sleep(1)
+    stop()
+
+def go_to_3():
+    forward(); time.sleep(1)
+    turn_left(); time.sleep(1)
+    stop()
+
+def go_to_4():
+    forward(); time.sleep(2.5); stop()
+
+def return_home():
+    backward()
+    time.sleep(2)
+    stop()
+
+def choreo_A():
+    forward(); time.sleep(1)
+    check_boundary()
+    spin()
+    turn_left(); time.sleep(1)
+    spin()
+    stop()
+
+def choreo_B():
+    turn_right(); time.sleep(1)
+    spin()
+    forward(); time.sleep(1)
+    check_boundary()
+    spin()
+    stop()
+
+def choreo_C():
+    forward(); time.sleep(1.5)
+    spin()
+    backward(); time.sleep(1)
+    spin()
+    stop()
+
+def choreo_D():
+    spin()
+    turn_left(); time.sleep(1)
+    forward(); time.sleep(1)
+    check_boundary()
+    spin()
+    stop()
+
+def event_occured(event, data):
+    global value
+
+    if event == 3:
+        conn_handle, value_handle = data
+        if value_handle == char_handle:
+            msg = ble.gatts_read(char_handle).decode().strip()
+            print("Received:", msg)
+            value = msg
+
+ble.irq(event_occured)
+
+
+while True:
+
+    if value:
+
+        if value == "1":
+            go_to_1()
+
+        elif value == "2":
+            go_to_2()
+
+        elif value == "3":
+            go_to_3()
+
+        elif value == "4":
+            go_to_4()
+
+        elif value == "A":
+            choreo_A()
+            spin()
+            return_home()
+
+        elif value == "B":
+            choreo_B()
+            spin()
+            return_home()
+
+        elif value == "C":
+            choreo_C()
+            spin()
+            return_home()
+
+        elif value == "D":
+            choreo_D()
+            spin()
+            return_home()
+
+        value = ""
+
+    time.sleep(0.2)
+
+
+
+FINAL CODE
+from machine import Pin, PWM
+import bluetooth
+import time
+
+
+ir = Pin(3, Pin.IN, Pin.PULL_UP)
+
+
+LEFT_IN1 = Pin(13, Pin.OUT)
+LEFT_IN2 = Pin(12, Pin.OUT)
+LEFT_ENA = PWM(Pin(14), freq = 1000)
+LEFT_ENA.duty(0)
+
+RIGHT_IN1 = Pin(27, Pin.OUT)
+RIGHT_IN2 = Pin(26, Pin.OUT)
+RIGHT_ENB = PWM(Pin(25),freq = 1000)
+RIGHT_ENB.duty(0)
+
+SPEED = 768
+
+
+IN1 = Pin(23, Pin.OUT)
+IN2 = Pin(22, Pin.OUT)
+IN3 = Pin(5, Pin.OUT)
+IN4 = Pin(15, Pin.OUT)
+
+my_delay = 0.005
+seq = [[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]]
+
+value = ""
+sequence = []
+current_pos = 'home'
+name = "Dancing Doll"
+
+def stop():
+    LEFT_IN1.off(); LEFT_IN2.off()
+    RIGHT_IN1.off(); RIGHT_IN2.off()
+    LEFT_ENA.duty(0)
+    RIGHT_ENB.duty(0)
+
+def forward():
+    LEFT_IN1.on(); LEFT_IN2.off()
+    RIGHT_IN1.on(); RIGHT_IN2.off()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def backward():
+    LEFT_IN1.off(); LEFT_IN2.on()
+    RIGHT_IN1.off(); RIGHT_IN2.on()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def turn_left():
+    LEFT_IN1.off(); LEFT_IN2.on()
+    RIGHT_IN1.on(); RIGHT_IN2.off()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def turn_right():
+    LEFT_IN1.on(); LEFT_IN2.off()
+    RIGHT_IN1.off(); RIGHT_IN2.on()
+    LEFT_ENA.duty(SPEED); RIGHT_ENB.duty(SPEED)
+
+def stepper_step():
+    for step in seq:
+        IN1.value(step[0])
+        IN2.value(step[1])
+        IN3.value(step[2])
+        IN4.value(step[3])
+    
+def spin():
+    for i in range(120):
+        stepper_step()
+        time.sleep(my_delay)
+
+def do_move(steps):
+    for step in steps:
+        direction = step[0]
+        duration = step[1]
+        if direction == "forward":
+            forward()
+        elif direction == "backward":
+            backward()
+        elif direction == "left":
+            turn_left()
+        elif direction == "right":
+            turn_right()
+        time.sleep(duration)
+        stop()
+        spin()
+        time.sleep(0.2)
+
+TRANSITIONS = {
+    ('home', 1): [('forward', 4)],
+    ('home', 2): [('forward', 2), ('right', 3), ('forward', 4)],
+    ('home', 3): [('left', 3), ('forward', 4)],
+    ('home', 4): [('right', 3), ('forward', 4)],
+    (1, 2): [('right', 3), ('forward', 4)],
+    (1, 3): [('left', 2), ('forward', 4)],
+    (1, 4): [('right', 2), ('forward', 4)],
+    (2, 1): [('left', 4), ('forward', 4)],
+    (2, 3): [('left', 6), ('forward', 4)],
+    (2, 4): [('forward', 2), ('right', 3), ('forward', 5)],
+    (3, 1): [('right', 2), ('forward', 4)],
+    (3, 2): [('right', 3), ('forward', 4)],
+    (3, 4): [('right', 3), ('forward', 4)],
+    (4, 1): [('left', 2), ('forward', 2)],
+    (4, 2): [('forward', 5), ('left', 3), ('forward', 2)],
+    (4, 3): [('left', 3), ('forward', 4)],
+    (1, 'home'): [('backward', 4)],
+    (2, 'home'): [('backward', 4), ('left', 3), ('backward', 2)],
+    (3, 'home'): [('backward', 4), ('right', 3)],
+    (4, 'home'): [('backward', 4), ('left', 3)],
+}
+
+def return_home():
+    global current_pos
+    if current_pos == 'home':
+        return
+    key = (current_pos, 'home')
+    if key in TRANSITIONS:
+        print("Returning home")
+        do_move(TRANSITIONS[key])
+    current_pos = 'home'
+    print("Doll is back at home.")
+
+def run_sequence(seq):
+    global current_pos
+    if not seq:
+        print("Empty sequence received.")
+        return
+    print("Starting sequence:", seq)
+    for next_point in seq:
+        if next_point == current_pos:
+            print("Skipping duplicate point:", next_point)
+            continue
+        key = (current_pos, next_point)
+        if key in TRANSITIONS:
+            print("Moving:", current_pos, "->", next_point)
+            do_move(TRANSITIONS[key])
+            current_pos = next_point
+            time.sleep(0.2)
+            spin()
+            time.sleep(0.2)
+        else:
+            print("ERROR: No transition for", key)
+            break
+    spin()
+    return_home()
+    stop()
+
+ble = bluetooth.BLE()
+ble.active(True)
+ble.config(gap_name=name)
+service_UUID = bluetooth.UUID("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
+char_UUID = bluetooth.UUID("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
+char = (char_UUID, bluetooth.FLAG_WRITE)
+service = (service_UUID, (char,))
+((char_handle,),) = ble.gatts_register_services((service,))
+
+def event_occurred(event, data):
+    global value
+    if event == 3:
+        conn_handle, value_handle = data
+        if value_handle == char_handle:
+            raw_msg = ble.gatts_read(char_handle).rstrip(b'\x00')
+            msg = raw_msg.decode().strip()
+            print("Received:", msg)
+            
+            global value
+            value = msg 
+
+def advertise(device_name):
+    name_bytes = device_name.encode()
+    flags = bytearray([0x02, 0x01, 0x06])
+    full_name = bytearray([len(name_bytes) + 1, 0x09]) + name_bytes
+    adv_data = flags + full_name
+    ble.gap_advertise(100000, adv_data=adv_data)
+    print("Advertising as:", device_name)
+
+advertise(name)
+ble.irq(event_occurred)
+print("Doll is ready!")
+
+while True:
+    if value:
+        msg = value
+        value = ""
+
+        if msg == "CLEAR":
+            sequence.clear()
+            print("Sequence cleared.")
+
+        else:
+            parts = msg.split(",")
+            sequence = []
+            for p in parts:
+                if p != "":
+                    try:
+                        sequence.append(int(p.strip()))
+                    except:
+                        print("Invalid number in sequence:", p)
+            print("Sequence saved:", sequence)
+            if sequence:
+                run_sequence(sequence)
+                sequence.clear()
+            else:
+                print("No sequence set")
+            
+    time.sleep(0.2)
+
+
